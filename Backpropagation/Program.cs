@@ -80,13 +80,12 @@ namespace Backpropagation
                 errors.Add(error);
 
                 // validate network while we are training
-                //double validationError = NetworkValidationService
-                //    .Validate(network, validation, labels);
-                //validationErrors.Add(validationError);
+                double validationError = NetworkValidationService
+                    .Validate(network, validation, labels);
+                validationErrors.Add(validationError);
 
-                //                Console.WriteLine($"{DateTime.Now} Эпоха: {i}, Ошибка обучения: {error}, Ошибка тестирования: {validationError}");
+                Console.WriteLine($"{DateTime.Now} Эпоха: {i}, Ошибка обучения: {error}, Ошибка тестирования: {validationError}");
 
-                Console.WriteLine($"{DateTime.Now} Эпоха: {i}, Ошибка обучения: {error}");
             }
 
             //PlotService.PlotValidationCurve(validationErrors, EpochCount);
