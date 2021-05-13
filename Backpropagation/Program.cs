@@ -17,9 +17,13 @@ namespace Backpropagation
     class Program
     {
         private const int EpochCount = 500;
+        private const int InputNeuronsCount = 784;
+        private const int FirstHiddenLayerNeuronsCount = 100;
+        private const int SecondHiddenLayerNeuronsCount = 100;
+        private const int OutputNeuronsCount = 10;
 
-        private static readonly string[] FeatureColumns = Enumerable.Range(2, 784).Select(v => $"Column{v}").ToArray();
-        private static readonly string[] LabelColumns = Enumerable.Range(0, 10).Select(v => $"Label{v}").ToArray();
+        private static readonly string[] FeatureColumns = Enumerable.Range(2, InputNeuronsCount).Select(v => $"Column{v}").ToArray();
+        private static readonly string[] LabelColumns = Enumerable.Range(0, OutputNeuronsCount).Select(v => $"Label{v}").ToArray();
 
         private static readonly IDataService DataService = DependencyResolver.Resolve<IDataService>();
         private static readonly INetworkValidationService NetworkValidationService = DependencyResolver.Resolve<INetworkValidationService>();
@@ -37,35 +41,27 @@ namespace Backpropagation
             NormalizePixels(training);
             NormalizePixels(validation);
 
-            Console.WriteLine(@"Вывод случайного тренировочного образца...");
-            Random rnd = new Random();
-            int row = rnd.Next(1, training.RowCount);
-            string randomDigit = training.Rows[row]["Column1"].ToString();
-            
-            double[] x = Enumerable.Range(0, 784).Select(v => (double) (v % 28)).ToArray();
-            double[] y = Enumerable.Range(0, 784).Select(v => (double)(-v / 28)).ToArray();
-            int[] z = Enumerable.Range(2, 784)
-                .Select(i => new { i, v = training.Rows[row][$"Column{i}"] as double? })
-                .Select(t => t.v > 0.5 ? 1 : 0).ToArray();
-
-            Scatterplot plot = new Scatterplot($"Цифра {randomDigit}", "x", "y");
-            plot.Compute(x, y, z);
-            ScatterplotBox.Show(plot);
-
             Console.WriteLine(@"Кодирование цифр в обучающей и проверочной выборках...");
             EncodeDigit(training);
             EncodeDigit(validation);
            
-            // build a neural network
-            ActivationNetwork network = new ActivationNetwork(new SigmoidFunction(), 784, 100, 100, 10);
+            // Инициализация нейронной сети
+            ActivationNetwork network = new ActivationNetwork(
+                new SigmoidFunction(), // сигмоидная активационная функция
+                InputNeuronsCount, // количество входных нейронов (784) 
+                FirstHiddenLayerNeuronsCount, // количество нейронов в первом скрытом слое (100)
+                SecondHiddenLayerNeuronsCount, // количество нейронов во втором скрытом слое (100)
+                OutputNeuronsCount); // количество нейронов в выходном слое (10)
 
+            // Данный класс отвечает за реализацию алгоритма обратного распространения ошибки
             BackPropagationLearning learner = new BackPropagationLearning(network)
             {
-                LearningRate = 0.05
+                LearningRate = 0.1 // Начальная скорость обучения
             };
-            new GaussianWeights(network, 0.1).Randomize();
 
-            // train the neural network
+            // Производим инициализацию весов сети при помощи распределения Гаусса
+            new GaussianWeights(network).Randomize();
+
             List<double> errors = new List<double>();
             List<double> validationErrors = new List<double>();
 
@@ -77,18 +73,23 @@ namespace Backpropagation
             for (int i = 0; i < EpochCount; i++)
             {
                 double error = learner.RunEpoch(features, labels) / labels.GetLength(0);
-                errors.Add(error);
+                errors.Add(error); // сохраняем ошибку для построения графика
 
-                // validate network while we are training
+                // Обучаем сеть методом обратного распространения ошибки
+                // и, для каждой эпохи, получаем ошибку обучения
                 double validationError = NetworkValidationService
-                    .Validate(network, validation, labels);
+                    .Validate(network, // Нейронная сеть
+                            validation, // данные для тестирования
+                            labels); // колонки с данными
+                // сохраняем квадратичную ошибку для построения графика
                 validationErrors.Add(validationError);
 
-                Console.WriteLine($"{DateTime.Now} Эпоха: {i}, Ошибка обучения: {error}, Ошибка тестирования: {validationError}");
-
+                Console.WriteLine($@"{DateTime.Now} Эпоха: {i}, 
+                Ошибка обучения: {error}, 
+                Ошибка тестирования: {validationError}");
             }
 
-            //PlotService.PlotValidationCurve(validationErrors, EpochCount);
+            PlotService.PlotValidationCurve(validationErrors, EpochCount);
             PlotService.PlotTrainingCurve(errors, EpochCount);
 
             PrintValidationReport(network, NetworkValidationService, training);
@@ -145,6 +146,24 @@ namespace Backpropagation
             // the accuracy
             double accuracy = 100.0 * (validation.Rows.KeyCount - numMistakes) / validation.Rows.KeyCount;
             Console.WriteLine($@"Количество ошибок: {numMistakes}, Точность распознавания: {accuracy:0.00}%");
+        }
+
+        private void PrintRandomDigit(Frame<int, string> training)
+        {
+            Console.WriteLine(@"Вывод случайного тренировочного образца...");
+            Random rnd = new Random();
+            int row = rnd.Next(1, training.RowCount);
+            string randomDigit = training.Rows[row]["Column1"].ToString();
+
+            double[] x = Enumerable.Range(0, 784).Select(v => (double)(v % 28)).ToArray();
+            double[] y = Enumerable.Range(0, 784).Select(v => (double)(-v / 28)).ToArray();
+            int[] z = Enumerable.Range(2, 784)
+                .Select(i => new { i, v = training.Rows[row][$"Column{i}"] as double? })
+                .Select(t => t.v > 0.5 ? 1 : 0).ToArray();
+
+            Scatterplot plot = new Scatterplot($"Цифра {randomDigit}", "x", "y");
+            plot.Compute(x, y, z);
+            ScatterplotBox.Show(plot);
         }
     }
 }

@@ -13,6 +13,11 @@ namespace ImageRecognition
 {
     public partial class MainForm : Form
     {
+        private const int ImageWidth = 28;
+        private const int ImageHeight = 28;
+        private const int BlackColourCode = 255;
+        private const int SymbolsCount = 10;
+
         private ActivationNetwork _network;
 
         /// <summary>
@@ -30,22 +35,22 @@ namespace ImageRecognition
 
         }
 
-        private Point? _Previous = null;
+        private Point? _previous;
 
         private void handWrittenPictureBox_MouseUp(object sender, MouseEventArgs e)
         {
-            _Previous = null;
+            _previous = null;
         }
 
         private void handWrittenPictureBox_MouseDown(object sender, MouseEventArgs e)
         {
-            _Previous = e.Location;
+            _previous = e.Location;
             handWrittenPictureBox_MouseMove(sender, e);
         }
 
         private void handWrittenPictureBox_MouseMove(object sender, MouseEventArgs e)
         {
-            if (_Previous == null) return;
+            if (_previous == null) return;
 
             if (handWrittenPictureBox.Image == null)
             {
@@ -59,20 +64,20 @@ namespace ImageRecognition
 
             using (Graphics g = Graphics.FromImage(handWrittenPictureBox.Image))
             {
-                g.DrawLine(new Pen(Color.Black, 5),  _Previous.Value, e.Location);
+                g.DrawLine(new Pen(Color.Black, 5),  _previous.Value, e.Location);
                 g.SmoothingMode = SmoothingMode.HighQuality;
             }
 
             handWrittenPictureBox.Invalidate();
-            _Previous = e.Location;
+            _previous = e.Location;
         }
 
         private void MainForm_Load(object sender, EventArgs e)
         {
             // build the progress bars
-            _bars = new List<ProgressBar>(10);
+            _bars = new List<ProgressBar>(SymbolsCount);
 
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < SymbolsCount; i++)
             {
                 // add label
                 Label label = new Label
@@ -108,32 +113,29 @@ namespace ImageRecognition
         /// </summary>
         private void PredictDigit()
         {
-            // construct the doodle
+            // получаем нарисованную мышью цифру
             Bitmap bitmap = new Bitmap(handWrittenPictureBox.Image);
 
-            // resize image to  28x28
-            ResizeBilinear resizer = new ResizeBilinear(28, 28);
+            // приводим изображение к размеру 28x28
+            ResizeBilinear resizer = new ResizeBilinear(ImageWidth, ImageHeight);
             Bitmap img = resizer.Apply(bitmap);
 
-            // get pixel data
-            IEnumerable<byte> pixels = Enumerable.Range(0, 28)
-                .SelectMany(y => Enumerable.Range(0, 28), (y, x) => img.GetPixel(x, y).B);
+            // Раскладываем изображение в пиксели
+            IEnumerable<byte> pixels = Enumerable.Range(0, ImageWidth)
+                .SelectMany(y => Enumerable.Range(0, ImageHeight), (y, x) => img.GetPixel(x, y).B);
 
-            // normalize pixel data
+            // нормализуем пиксели
             double[] input = pixels
-                .Select(p => new { p, v = 1.0 * (255 - p) / 255 })
+                .Select(p => new { p, v = 1.0 * (BlackColourCode - p) / BlackColourCode })
                 .Select(t => t.v > 0.1 ? t.v : 0)
                 .ToArray();
 
-            // run a prediction
+            // запускаем вычисление нейросетью вектора с вероятностями
             double[] predictions = _network.Compute(input.ToArray());
-            List<double> temps = new List<double>();
-
-            // show result
-            for (int i = 0; i < 10; i++)
+            
+            // показываем результат в элементах ProgressBar
+            for (int i = 0; i < SymbolsCount; i++)
             {
-                var t = 100 * predictions[i];
-                temps.Add(Math.Round(t));
                 _bars[i].Value = (int) (100 * predictions[i]);
             }
 
@@ -148,9 +150,9 @@ namespace ImageRecognition
         private void ClearPictureBoxButton_Click(object sender, EventArgs e)
         {
             handWrittenPictureBox.Image = null;
-            _Previous = null;
+            _previous = null;
 
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < SymbolsCount; i++)
             {
                 _bars[i].Value = 0;
             }
